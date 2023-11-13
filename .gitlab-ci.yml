@@ -1,0 +1,62 @@
+default:
+  image: registry.gitlab.com/cdiaz3827/docker-images/pulumi:latest
+  cache:
+    paths:
+      - .cache/pip
+      - $HOME/.pulumi/
+      - $VENV_PATH
+  tags:
+    - homelab
+  before_script:
+    - kubectl config use-context "$KUBE_CONTEXT"
+    - source $VENV_PATH/bin/activate
+    - $VENV_PATH/bin/pip install --no-color --upgrade -q -r requirements.txt
+    - pulumi login
+    - pulumi stack select $PULUMI_STACK
+
+include:
+  - template: Security/Secret-Detection.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+
+variables:
+  KUBE_CONTEXT: homelab-infrastructure/home-k8s:cdubnt1
+  VENV_PATH: /pulumi/projects/venv
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  PULUMI_STACK: "prod"
+
+stages:
+  - test
+  - preview
+  - build
+
+secret_detection:
+  before_script: []
+
+dependency_scanning:
+  before_script: []
+
+gemnasium-dependency_scanning:
+  before_script: []
+
+preview:
+  stage: preview
+  script:
+    - pulumi preview --diff --non-interactive
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+build:
+  stage: build
+  script:
+    - pulumi up --yes --non-interactive
+  artifacts:
+    paths:
+      - pulumi-log.txt
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $AUTO_DEPLOY == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual

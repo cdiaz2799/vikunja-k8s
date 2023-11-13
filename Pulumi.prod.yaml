@@ -1,0 +1,3 @@
+config:
+  vikunja:fqdn: https://vikunja.cdiaz.cloud
+  vikunja:tz: America/Phoenix
